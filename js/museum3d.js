@@ -511,6 +511,23 @@ const Museum3D = (() => {
   /* ── paintings ──────────────────────────────────────────────────────────── */
   function _buildPaintings() {
     const defs = [
+      // Bienvenida (casual, distintos tamanos)
+      { pos: [-5.6, 2.95, -7.93], ry: 0, w: 3.1, h: 3.9 },
+      { pos: [3.9, 2.68, -7.93], ry: 0, w: 2.25, h: 2.75 },
+      { pos: [6.05, 2.36, -7.93], ry: 0, w: 1.15, h: 1.72 },
+
+      { pos: [7.93, 3.04, -5.4], ry: Math.PI / 2, w: 2.85, h: 3.65 },
+      { pos: [7.93, 2.25, 3.9], ry: Math.PI / 2, w: 1.45, h: 2.1 },
+      { pos: [7.93, 2.88, 5.9], ry: Math.PI / 2, w: 1.95, h: 2.45 },
+
+      { pos: [5.1, 3.08, 7.93], ry: Math.PI, w: 2.65, h: 3.8 },
+      { pos: [-3.6, 2.52, 7.93], ry: Math.PI, w: 1.75, h: 2.3 },
+      { pos: [-5.95, 2.22, 7.93], ry: Math.PI, w: 1.2, h: 1.75 },
+
+      { pos: [-7.93, 2.85, 5.25], ry: -Math.PI / 2, w: 2.2, h: 2.95 },
+      { pos: [-7.93, 2.25, -3.95], ry: -Math.PI / 2, w: 1.35, h: 1.9 },
+      { pos: [-7.93, 3.02, -5.8], ry: -Math.PI / 2, w: 2.7, h: 3.55 },
+
       // Mes 1 (north)
       { pos: [-3.1, 2.92, -34.92], ry: 0, w: 1.75, h: 2.08 },
       { pos: [0, 2.98, -34.92], ry: 0, w: 1.9, h: 2.2 },
@@ -637,11 +654,11 @@ const Museum3D = (() => {
       emissiveIntensity: 0.28,
     });
 
-    const spawnRing = _add(new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.08, 12, 44), markerMat.clone()), [0, 0.04, 30], [-Math.PI / 2, 0, 0]);
+    const spawnRing = _add(new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.08, 12, 44), markerMat.clone()), [0, 0.04, 4.5], [-Math.PI / 2, 0, 0]);
     A.spawnRing = spawnRing;
-    _add(new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), new THREE.MeshBasicMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.1, side: THREE.DoubleSide })), [0, 0.02, 30], [-Math.PI / 2, 0, 0]);
+    _add(new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), new THREE.MeshBasicMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.1, side: THREE.DoubleSide })), [0, 0.02, 4.5], [-Math.PI / 2, 0, 0]);
 
-    const midRing = _add(new THREE.Mesh(new THREE.RingGeometry(1.1, 1.8, 48), new THREE.MeshBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.18, side: THREE.DoubleSide })), [0, 0.02, 16], [-Math.PI / 2, 0, 0]);
+    const midRing = _add(new THREE.Mesh(new THREE.RingGeometry(1.1, 1.8, 48), new THREE.MeshBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.18, side: THREE.DoubleSide })), [0, 0.02, 0], [-Math.PI / 2, 0, 0]);
     A.midRing = midRing;
 
     const welcomeTotem = _add(new THREE.Mesh(
@@ -667,6 +684,8 @@ const Museum3D = (() => {
     const candles = [
       [-6.2, -6.2], [6.2, -6.2], [-6.2, 6.2], [6.2, 6.2],
     ];
+    A.candleLights = [];
+    A.candleFlames = [];
     candles.forEach(([x, z], i) => {
       _add(new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.48, 12), new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.85 })), [x, 0.24, z]);
       const flame = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -679,12 +698,13 @@ const Museum3D = (() => {
       flame.scale.set(0.36, 0.5, 1);
       flame.position.set(x, 0.62, z);
       scene.add(flame);
-      if (i === 0) A.flame = flame;
-    });
+      A.candleFlames.push(flame);
 
-    A.candleL = new THREE.PointLight(0xfb923c, 2.2, 6.6, 1.6);
-    A.candleL.position.set(-6.2, 0.7, -6.2);
-    scene.add(A.candleL);
+      const light = new THREE.PointLight(i % 2 ? 0xfb923c : 0xfda4af, 1.75, 5.8, 1.7);
+      light.position.set(x, 0.72, z);
+      scene.add(light);
+      A.candleLights.push(light);
+    });
   }
 
   function _buildRoomThemes() {
@@ -967,7 +987,7 @@ const Museum3D = (() => {
 
     anime({
       targets: camera.position,
-      x: 0, y: 1.7, z: 30,
+      x: 0, y: 1.7, z: 4.5,
       duration: 2600,
       easing: 'easeOutExpo',
     });
@@ -1082,9 +1102,15 @@ const Museum3D = (() => {
     _updateMinimap();
 
     // Candle flicker
-    if (A.candleL) A.candleL.intensity = 3.5 + Math.sin(t*18)*0.55 + Math.sin(t*7.2)*0.3;
-    if (A.flame) {
-      A.flame.scale.set(0.48+Math.sin(t*15)*0.06, 0.58+Math.sin(t*11.5)*0.07, 1);
+    if (A.candleLights) {
+      A.candleLights.forEach((l, i) => {
+        l.intensity = 1.55 + Math.sin(t * (14 + i * 1.4)) * 0.32 + Math.sin(t * (6.4 + i)) * 0.18;
+      });
+    }
+    if (A.candleFlames) {
+      A.candleFlames.forEach((f, i) => {
+        f.scale.set(0.34 + Math.sin(t * (11 + i * 1.7)) * 0.05, 0.48 + Math.sin(t * (8 + i * 1.3)) * 0.06, 1);
+      });
     }
 
     // Moon pulse
