@@ -1,28 +1,23 @@
 // ─── POPUP DATA ────────────────────────────────────────────────────────────
 const FRAMES_DATA = [
   {
-    title:   "El inicio de todo",
-    message: "El momento en que te vi por primera vez, algo dentro de mí supo que eras especial. No hay palabra que describa lo que sentí.",
+   
     image:   "assets/images/1mes1.jpeg",
   },
   {
-    title:   "Tu sonrisa",
-    message: "Tu sonrisa es lo primero que pienso cuando despierto y lo último que recuerdo antes de dormir. Eres mi luz favorita.",
+    
     image:   "assets/images/1mes2.jpeg",
   },
   {
-    title:   "Momentos eternos",
-    message: "Contigo, hasta el silencio se vuelve mágico. Cada momento a tu lado es un recuerdo que guardo en el lugar más bonito de mi corazón.",
+    
     image:   "assets/images/1mes3.jpeg",
   },
   {
-    title:   "Mi lugar favorito",
-    message: "En tus brazos encontré el lugar al que siempre quise volver. No importa dónde esté, mientras estés tú, ya llegué a casa.",
+   
     image:   "assets/images/1mes4.jpeg",
   },
   {
-    title:   "4 Meses de magia",
-    message: "Cuatro meses de risas, de miradas, de sueños compartidos. Cuatro meses que ya parecen toda una vida, porque contigo el tiempo vuela.",
+   
     image:   "assets/images/1mes5.jpeg",
   },
   {

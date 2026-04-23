@@ -49,6 +49,9 @@ const Museum3D = (() => {
 
   // Room tracking for entry popups
   let _currentRoom = null;
+  let _inFutureRoom = false;
+  let _futureRoomVisited = false;
+  const interactables = [];
 
   /* ── public API ─────────────────────────────────────────────────────────── */
   function init(onReady) {
@@ -63,6 +66,7 @@ const Museum3D = (() => {
     _buildPaintings();
     _buildProps();
     _buildRoomThemes();
+    _buildFutureRoom();
     _setupAudio();
     _bindInput();
     _currentRoom = 'month3'; // camera starts outside south corridor (month3 zone)
@@ -95,9 +99,12 @@ const Museum3D = (() => {
     Object.keys(keys).forEach(k => delete keys[k]);
     touch.left = touch.right = null;
     paintings.length = 0;
+    interactables.length = 0;
     COLLIDERS.length = 0;
     Object.keys(A).forEach(k => delete A[k]);
     _currentRoom = null;
+    _inFutureRoom = false;
+    _futureRoomVisited = false;
 
     _teardownAudio();
 
@@ -891,6 +898,299 @@ const Museum3D = (() => {
       scene.add(light);
       A.candleLights.push(light);
     });
+
+    // ── Future portal trigger (NW corner of welcome room) ──────────────────
+    const futurePortalMesh = new THREE.Mesh(
+      new THREE.TorusGeometry(0.85, 0.09, 16, 48),
+      new THREE.MeshStandardMaterial({
+        color: 0xe9d5ff,
+        emissive: 0x7c3aed,
+        emissiveIntensity: 1.4,
+        roughness: 0.15,
+        metalness: 0.6,
+      })
+    );
+    futurePortalMesh.position.set(-4.5, 1.55, -4.5);
+    futurePortalMesh.userData = { onInteract: _teleportToFuture, hintText: 'El Futuro — clic para entrar ✦' };
+    scene.add(futurePortalMesh);
+    interactables.push(futurePortalMesh);
+    A.futurePortalMesh = futurePortalMesh;
+
+    const futurePortalGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: _glow(0x7c3aed),
+      transparent: true,
+      opacity: 0.38,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }));
+    futurePortalGlow.scale.set(2.8, 2.8, 1);
+    futurePortalGlow.position.set(-4.5, 1.55, -4.5);
+    scene.add(futurePortalGlow);
+    A.futurePortalGlow = futurePortalGlow;
+
+    const futureLabel = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: _labelTexture('EL FUTURO', '#e9d5ff'),
+      transparent: true,
+      opacity: 0.92,
+      depthWrite: false,
+    }));
+    futureLabel.scale.set(2.4, 0.66, 1);
+    futureLabel.position.set(-4.5, 3.0, -4.5);
+    scene.add(futureLabel);
+    A.futureLabel = futureLabel;
+
+    // ── Red button (end-of-tour surprise, SE corner of welcome room) ───────
+    _add(new THREE.Mesh(
+      new THREE.CylinderGeometry(0.42, 0.50, 0.30, 20),
+      new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.55, metalness: 0.5 })
+    ), [4.5, 0.15, 4.5]);
+
+    const redBtnMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.28, 0.20, 20),
+      new THREE.MeshStandardMaterial({
+        color: 0xef4444,
+        emissive: 0xdc2626,
+        emissiveIntensity: 1.1,
+        roughness: 0.28,
+        metalness: 0.22,
+      })
+    );
+    redBtnMesh.position.set(4.5, 0.40, 4.5);
+    redBtnMesh.userData = { onInteract: _onRedButtonClick, hintText: 'Clic para el mensaje final ❤️' };
+    scene.add(redBtnMesh);
+    interactables.push(redBtnMesh);
+    A.redBtnMesh = redBtnMesh;
+
+    const redBtnGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: _glow(0xef4444),
+      transparent: true,
+      opacity: 0.28,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }));
+    redBtnGlow.scale.set(1.4, 1.4, 1);
+    redBtnGlow.position.set(4.5, 0.5, 4.5);
+    scene.add(redBtnGlow);
+    A.redBtnGlow = redBtnGlow;
+  }
+
+  /* ── El Futuro room ─────────────────────────────────────────────────────── */
+  function _buildFutureRoom() {
+    const cx = 105, cz = 0;
+    const RW = 14, RD = 14;
+    const FH = 6.2;
+
+    const darkMat = new THREE.MeshStandardMaterial({
+      color: 0x02000a, roughness: 0.98, metalness: 0.02,
+      emissive: 0x05011a, emissiveIntensity: 0.18, side: THREE.DoubleSide,
+    });
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: 0x04010f, roughness: 0.92, metalness: 0.08,
+      emissive: 0x08022a, emissiveIntensity: 0.2,
+    });
+    const emptyMat = new THREE.MeshStandardMaterial({
+      color: 0x03010a, roughness: 0.98, emissive: 0x1a0a3a, emissiveIntensity: 0.3,
+    });
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: 0xd4af37, metalness: 0.92, roughness: 0.18,
+      emissive: 0x4a3500, emissiveIntensity: 0.35,
+    });
+
+    _add(new THREE.Mesh(new THREE.PlaneGeometry(RW*2, RD*2), floorMat), [cx, 0.001, cz], [-Math.PI/2, 0, 0]);
+    _add(new THREE.Mesh(new THREE.PlaneGeometry(RW*2, RD*2), darkMat.clone()), [cx, FH, cz], [Math.PI/2, 0, 0]);
+    _add(new THREE.Mesh(new THREE.PlaneGeometry(RD*2, FH), darkMat.clone()), [cx+RW, FH/2, cz], [0, -Math.PI/2, 0]);
+    _add(new THREE.Mesh(new THREE.PlaneGeometry(RD*2, FH), darkMat.clone()), [cx-RW, FH/2, cz], [0,  Math.PI/2, 0]);
+    _add(new THREE.Mesh(new THREE.PlaneGeometry(RW*2, FH), darkMat.clone()), [cx, FH/2, cz-RD], [0, 0, 0]);
+    _add(new THREE.Mesh(new THREE.PlaneGeometry(RW*2, FH), darkMat.clone()), [cx, FH/2, cz+RD], [0, Math.PI, 0]);
+
+    // Colliders
+    COLLIDERS.push({ minX: cx+RW-0.1, maxX: cx+RW+0.1, minZ: cz-RD,   maxZ: cz+RD   });
+    COLLIDERS.push({ minX: cx-RW-0.1, maxX: cx-RW+0.1, minZ: cz-RD,   maxZ: cz+RD   });
+    COLLIDERS.push({ minX: cx-RW,     maxX: cx+RW,     minZ: cz-RD-0.1, maxZ: cz-RD+0.1 });
+    COLLIDERS.push({ minX: cx-RW,     maxX: cx+RW,     minZ: cz+RD-0.1, maxZ: cz+RD+0.1 });
+
+    // Lighting
+    const futAmbient = new THREE.AmbientLight(0x120525, 0.5);
+    scene.add(futAmbient);
+    [[cx, FH-0.5, cz, 0x5b21b6, 0.7, 22],
+     [cx-8, FH-0.5, cz-6, 0x3730a3, 0.45, 12],
+     [cx+8, FH-0.5, cz+6, 0x4c1d95, 0.45, 12],
+    ].forEach(([px,py,pz,c,i,d], idx) => {
+      const pt = new THREE.PointLight(c, i, d, 1.8);
+      pt.position.set(px, py, pz);
+      scene.add(pt);
+      A[`futL${idx}`] = pt;
+    });
+
+    // Ceiling stars
+    const sN = 90;
+    const sPos = new Float32Array(sN * 3);
+    for (let i = 0; i < sN; i++) {
+      sPos[i*3]   = cx + (Math.random()-0.5) * RW * 1.85;
+      sPos[i*3+1] = FH - 0.04;
+      sPos[i*3+2] = cz + (Math.random()-0.5) * RD * 1.85;
+    }
+    const sSg = new THREE.BufferGeometry();
+    sSg.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+    const futStars = new THREE.Points(sSg, new THREE.PointsMaterial({
+      color: 0xc4b5fd, size: 0.07, transparent: true, opacity: 0.5,
+      sizeAttenuation: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    scene.add(futStars);
+    A.futureStars = futStars;
+
+    // Empty frames helper
+    function _addEmptyFrame(pos, ry, w, h) {
+      const pm = new THREE.Mesh(new THREE.PlaneGeometry(w, h), emptyMat.clone());
+      pm.position.set(...pos);
+      pm.rotation.y = ry;
+      scene.add(pm);
+      const fw = 0.11, fd = 0.07;
+      const g = new THREE.Group();
+      [[w+fw*2, fw, fd, 0, h/2+fw/2, fd/2],
+       [w+fw*2, fw, fd, 0, -h/2-fw/2, fd/2],
+       [fw, h+fw*2, fd, -w/2-fw/2, 0, fd/2],
+       [fw, h+fw*2, fd,  w/2+fw/2, 0, fd/2],
+      ].forEach(([sx,sy,sz, ox,oy,oz]) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz), goldMat.clone());
+        m.position.set(ox, oy, oz);
+        g.add(m);
+      });
+      g.position.set(...pos);
+      g.rotation.y = ry;
+      scene.add(g);
+    }
+
+    // East wall frames (facing west, ry = -PI/2)
+    [-10,-5,0,5,10].forEach(z => {
+      _addEmptyFrame([cx+RW-0.06, 3.4, cz+z], -Math.PI/2, 2.0, 2.8);
+      _addEmptyFrame([cx+RW-0.06, 1.3, cz+z], -Math.PI/2, 1.2, 1.6);
+    });
+    // West wall frames (facing east, ry = +PI/2)
+    [-10,-5,0,5,10].forEach(z => {
+      _addEmptyFrame([cx-RW+0.06, 3.4, cz+z],  Math.PI/2, 2.0, 2.8);
+      _addEmptyFrame([cx-RW+0.06, 1.3, cz+z],  Math.PI/2, 1.2, 1.6);
+    });
+    // North wall frames (facing south, ry = 0)
+    [-9,-4,1,6,11].forEach(x => {
+      _addEmptyFrame([cx+x, 3.4, cz-RD+0.06], 0, 1.8, 2.6);
+      _addEmptyFrame([cx+x, 1.3, cz-RD+0.06], 0, 1.1, 1.5);
+    });
+    // South wall frames (facing north, ry = PI) — leave center for return portal
+    [-10,-5,5,10].forEach(x => {
+      _addEmptyFrame([cx+x, 3.4, cz+RD-0.06], Math.PI, 1.8, 2.6);
+    });
+    [-9,2,9].forEach(x => {
+      _addEmptyFrame([cx+x, 1.3, cz+RD-0.06], Math.PI, 1.4, 1.8);
+    });
+
+    // Return portal on south wall
+    const retPortal = new THREE.Mesh(
+      new THREE.TorusGeometry(1.1, 0.09, 16, 48),
+      new THREE.MeshStandardMaterial({
+        color: 0xa78bfa, emissive: 0x7c3aed, emissiveIntensity: 0.9,
+        roughness: 0.2, metalness: 0.58,
+      })
+    );
+    retPortal.position.set(cx, 1.55, cz+RD-0.3);
+    retPortal.userData = { onInteract: _teleportBack, hintText: 'Clic para regresar al museo ←' };
+    scene.add(retPortal);
+    interactables.push(retPortal);
+    A.returnPortal = retPortal;
+
+    const retGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: _glow(0x7c3aed), transparent: true, opacity: 0.3,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    retGlow.scale.set(3.4, 3.4, 1);
+    retGlow.position.set(cx, 1.55, cz+RD-0.3);
+    scene.add(retGlow);
+    A.returnPortalGlow = retGlow;
+
+    const retLabel = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: _labelTexture('← Volver', '#a78bfa'),
+      transparent: true, opacity: 0.88, depthWrite: false,
+    }));
+    retLabel.scale.set(2.2, 0.6, 1);
+    retLabel.position.set(cx, 3.4, cz+RD-0.3);
+    scene.add(retLabel);
+  }
+
+  /* ── Teleport functions ─────────────────────────────────────────────────── */
+  function _teleportToFuture() {
+    const overlay = document.getElementById('transition-overlay');
+    if (!overlay) return;
+    anime({
+      targets: overlay, opacity: [0, 1], duration: 600, easing: 'easeInQuad',
+      complete() {
+        camera.position.set(105, 1.7, 10);
+        player.yaw   = Math.PI;
+        player.pitch = 0;
+        _inFutureRoom = true;
+        _currentRoom  = 'future';
+        anime({
+          targets: overlay, opacity: [1, 0], duration: 700, delay: 200, easing: 'easeOutQuad',
+          complete() {
+            if (!_futureRoomVisited) {
+              _futureRoomVisited = true;
+              setTimeout(_showFuturePopup, 700);
+            }
+          },
+        });
+      },
+    });
+  }
+
+  function _teleportBack() {
+    const overlay = document.getElementById('transition-overlay');
+    if (!overlay) return;
+    anime({
+      targets: overlay, opacity: [0, 1], duration: 600, easing: 'easeInQuad',
+      complete() {
+        camera.position.set(0, 1.7, 4.5);
+        player.yaw   = 0;
+        player.pitch = 0;
+        _inFutureRoom = false;
+        _currentRoom  = 'welcome';
+        anime({ targets: overlay, opacity: [1, 0], duration: 700, delay: 200, easing: 'easeOutQuad' });
+      },
+    });
+  }
+
+  function _showFuturePopup() {
+    const overlay = document.getElementById('room-popup-overlay');
+    const titleEl = document.getElementById('room-popup-month');
+    const textEl  = document.getElementById('room-popup-text');
+    if (!overlay) return;
+    titleEl.textContent = '✦ El Futuro ✦';
+    textEl.textContent  = 'Aquí estarán todos los momentos hermosos que vamos a vivir juntos, cumpliendo sueños y metas. Cada uno de estos marcos vacíos espera una historia que aún no hemos escrito. El futuro nos pertenece, y lo voy a construir a tu lado, siempre. 💜';
+    overlay.classList.add('active');
+    const btn = document.getElementById('room-popup-close');
+    let autoClose;
+    const close = () => {
+      clearTimeout(autoClose);
+      overlay.classList.remove('active');
+      btn.removeEventListener('click', close);
+    };
+    btn.addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); }, { once: true });
+    autoClose = setTimeout(close, 15000);
+  }
+
+  function _onRedButtonClick() {
+    if (locked) document.exitPointerLock();
+    if (A.redBtnMesh) {
+      anime({ targets: A.redBtnMesh.material, emissiveIntensity: [1.1, 4.0, 1.1], duration: 800, easing: 'easeInOutQuad' });
+    }
+    setTimeout(() => {
+      if (typeof PopupController !== 'undefined') {
+        PopupController.openDirect({
+          image: 'assets/images/1mes9.jpeg',
+          title: '♥ Para ti, siempre ♥',
+          message: 'Estos 4 meses han sido el comienzo de todo lo que quiero vivir contigo. Gracias por cada risa, cada abrazo, cada mirada. Eres mi lugar favorito en el mundo. Con todo mi amor, ahora y siempre. ❤️',
+        });
+      }
+    }, locked ? 160 : 0);
   }
 
   function _buildRoomThemes() {
@@ -911,7 +1211,7 @@ const Museum3D = (() => {
           emissive: t.c2,
           emissiveIntensity: 0.27,
           transparent: true,
-          opacity: 0.2,
+          opacity: 0.1,
           polygonOffset: true,
           polygonOffsetFactor: -1,
           polygonOffsetUnits: -1,
@@ -962,7 +1262,7 @@ const Museum3D = (() => {
         roughness: 0.86,
         metalness: 0.04,
         transparent: true,
-        opacity: 0.22,
+        opacity: 0,
       });
 
       if (t.axis === 'z') {
@@ -1065,6 +1365,13 @@ const Museum3D = (() => {
       const mx   =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
       const my   = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
       _ray.setFromCamera({ x: mx, y: my }, camera);
+
+      const hitI = _ray.intersectObjects(interactables, false);
+      if (hitI.length > 0 && hitI[0].distance <= INTERACT_DISTANCE) {
+        const action = hitI[0].object.userData.onInteract;
+        if (action) { action(); return; }
+      }
+
       const hits = _ray.intersectObjects(paintings, false);
 
       if (hits.length > 0 && hits[0].distance <= INTERACT_DISTANCE) {
@@ -1218,8 +1525,13 @@ const Museum3D = (() => {
       let nx = camera.position.x + (-sin*mz + cos*mx) * player.speed * dt;
       let nz = camera.position.z + (-cos*mz - sin*mx) * player.speed * dt;
 
-      nx = Math.max(-W/2+0.72, Math.min(W/2-0.72, nx));
-      nz = Math.max(-D/2+0.72, Math.min(D/2-0.72, nz));
+      if (_inFutureRoom) {
+        nx = Math.max(91.5, Math.min(118.5, nx));
+        nz = Math.max(-13.5, Math.min(13.5, nz));
+      } else {
+        nx = Math.max(-W/2+0.72, Math.min(W/2-0.72, nx));
+        nz = Math.max(-D/2+0.72, Math.min(D/2-0.72, nz));
+      }
 
       const solved = _resolveWallCollisions(nx, nz, 0.42);
       camera.position.x = solved.x;
@@ -1266,6 +1578,18 @@ const Museum3D = (() => {
     // When free:   cast from actual mouse cursor position.
     const origin = locked ? { x: 0, y: 0 } : _mouseNDC;
     _ray.setFromCamera(origin, camera);
+
+    const hitI = _ray.intersectObjects(interactables, false);
+    if (hitI.length > 0 && hitI[0].distance <= INTERACT_DISTANCE) {
+      const ch   = document.getElementById('museum-crosshair');
+      const hint = document.getElementById('museum-hint');
+      if (ch)   ch.className = 'museum-crosshair near-painting';
+      if (hint) { hint.className = 'museum-hint visible'; hint.textContent = hitI[0].object.userData.hintText || 'Clic para interactuar'; }
+      if (!locked && renderer) renderer.domElement.style.cursor = 'pointer';
+      nearPainting = null;
+      return;
+    }
+
     const hits = _ray.intersectObjects(paintings);
 
     // Distance limit only for crosshair mode (locked); free mouse has no limit
@@ -1384,6 +1708,24 @@ const Museum3D = (() => {
         : 0.09 + Math.sin(t*1.6+pm.userData.paintingIndex)*0.04;
     });
 
+    // Future portal + red button animations
+    if (A.futurePortalMesh) {
+      A.futurePortalMesh.rotation.z += dt * 0.55;
+      A.futurePortalMesh.rotation.x += dt * 0.22;
+    }
+    if (A.futurePortalGlow) {
+      A.futurePortalGlow.material.opacity = 0.28 + Math.sin(t * 2.1) * 0.1;
+      A.futurePortalGlow.scale.setScalar(2.6 + Math.sin(t * 1.8) * 0.3);
+    }
+    if (A.returnPortal)     A.returnPortal.rotation.z += dt * 0.5;
+    if (A.returnPortalGlow) A.returnPortalGlow.material.opacity = 0.24 + Math.sin(t * 1.9) * 0.08;
+    if (A.redBtnMesh)  A.redBtnMesh.material.emissiveIntensity  = 0.85 + Math.sin(t * 3.5) * 0.3;
+    if (A.redBtnGlow)  A.redBtnGlow.material.opacity            = 0.22 + Math.sin(t * 2.8) * 0.1;
+    if (A.futureStars) A.futureStars.material.opacity           = 0.38 + Math.sin(t * 1.3) * 0.12;
+    for (let i = 0; i < 3; i++) {
+      if (A[`futL${i}`]) A[`futL${i}`].intensity = 0.42 + Math.sin(t * (1.2 + i * 0.3)) * 0.14;
+    }
+
     renderer.render(scene, camera);
   }
 
@@ -1414,6 +1756,7 @@ const Museum3D = (() => {
   }
 
   function _updateMinimap() {
+    if (_inFutureRoom) return;
     const mm = document.getElementById('minimap-player');
     if (!mm || !camera) return;
     const xPct = ((camera.position.x + W/2) / W) * 100;
@@ -1579,14 +1922,16 @@ const Museum3D = (() => {
     const z = camera.position.z;
 
     let room = 'welcome';
-    if (Math.abs(x) < 7.5 && z < -24) room = 'month1';
+    if (_inFutureRoom) {
+      room = 'future';
+    } else if (Math.abs(x) < 7.5 && z < -24) room = 'month1';
     else if (x > 24 && Math.abs(z) < 7.5) room = 'month2';
     else if (Math.abs(x) < 7.5 && z > 24) room = 'month3';
     else if (x < -24 && Math.abs(z) < 7.5) room = 'month4';
 
     if (room !== _currentRoom) {
       _currentRoom = room;
-      if (room !== 'welcome') {
+      if (room !== 'welcome' && room !== 'future') {
         setTimeout(() => _showRoomPopup(room), 400);
       }
     }

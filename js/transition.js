@@ -44,14 +44,15 @@ const Transition = (() => {
 
           // 4. Init 3D scene
           Museum3D.init(() => {
-            // Controls hint fades after 3.5 s
-            const hint = document.getElementById('controls-hint-3d');
-            if (hint) {
-              hint.style.opacity = '1';
-              setTimeout(() => anime({
-                targets: hint, opacity: 0, duration: 900, easing: 'easeOutQuad',
-              }), 3500);
-            }
+            _showRulesPopup(() => {
+              const hint = document.getElementById('controls-hint-3d');
+              if (hint) {
+                hint.style.opacity = '1';
+                setTimeout(() => anime({
+                  targets: hint, opacity: 0, duration: 900, easing: 'easeOutQuad',
+                }), 3500);
+              }
+            });
           });
 
           // 5. Reveal 3D
@@ -148,6 +149,21 @@ const Transition = (() => {
         complete:    () => p.remove(),
       });
     }
+  }
+
+  /* ── rules popup ───────────────────────────────────────────────────────── */
+  function _showRulesPopup(callback) {
+    const overlay = document.getElementById('rules-overlay');
+    if (!overlay) { if (callback) callback(); return; }
+
+    overlay.classList.add('active');
+    const btn = document.getElementById('rules-enter-btn');
+    const close = () => {
+      overlay.classList.remove('active');
+      btn.removeEventListener('click', close);
+      if (callback) callback();
+    };
+    btn.addEventListener('click', close);
   }
 
   /* ── bind buttons ───────────────────────────────────────────────────────── */
