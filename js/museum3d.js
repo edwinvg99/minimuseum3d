@@ -34,7 +34,7 @@ const Museum3D = (() => {
   // Painting meshes for raycasting
   const paintings  = [];
   let   nearPainting = null;
-  const INTERACT_DISTANCE = 4.2;
+  const INTERACT_DISTANCE = 5.5;
 
   // Free-mouse NDC position (used when pointer is NOT locked)
   const _mouseNDC = { x: 0, y: 0 };
@@ -46,6 +46,9 @@ const Museum3D = (() => {
   const H_map = {};
   let bgm = null;
   let audioBtn = null;
+
+  // Room tracking for entry popups
+  let _currentRoom = null;
 
   /* ── public API ─────────────────────────────────────────────────────────── */
   function init(onReady) {
@@ -62,6 +65,7 @@ const Museum3D = (() => {
     _buildRoomThemes();
     _setupAudio();
     _bindInput();
+    _currentRoom = 'month3'; // camera starts outside south corridor (month3 zone)
     _renderLoop();
     _flyIn(onReady);
   }
@@ -93,6 +97,7 @@ const Museum3D = (() => {
     paintings.length = 0;
     COLLIDERS.length = 0;
     Object.keys(A).forEach(k => delete A[k]);
+    _currentRoom = null;
 
     _teardownAudio();
 
@@ -321,10 +326,6 @@ const Museum3D = (() => {
       scene.add(halo);
     };
 
-    addDarkDoor(0, -WR, 0);
-    addDarkDoor(0, WR, Math.PI);
-    addDarkDoor(WR, 0, -Math.PI / 2);
-    addDarkDoor(-WR, 0, Math.PI / 2);
 
     const addPortal = (x, z, ry, color) => {
       const portal = new THREE.Mesh(
@@ -509,45 +510,129 @@ const Museum3D = (() => {
   }
 
   /* ── paintings ──────────────────────────────────────────────────────────── */
+  // Auto-spread paintings on each wall so frames never overlap.
+  // Groups by (wall-fixed-coord, y-row) then pushes apart any pair that's too close.
+  function _autoSpreadPaintings(defs) {
+    const FW  = 0.14; // frame half-extension beyond painting edge
+    const GAP = 0.30; // minimum clear gap between neighbouring frames
+
+    // For each painting decide which axis runs ALONG the wall (varies) vs ACROSS (fixed).
+    // ry ≈ 0 or π  → north/south wall → paintings arranged along X  (axis idx 0)
+    // ry ≈ ±π/2    → east/west  wall  → paintings arranged along Z  (axis idx 2)
+    function alongAxis(ry) {
+      const a = ((ry % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      return (a < 0.15 || Math.abs(a - Math.PI) < 0.15) ? 0 : 2;
+    }
+    function fixedAxis(ry) { return alongAxis(ry) === 0 ? 2 : 0; }
+
+    // Bucket: same wall (fixed coord within 0.3) AND same height row (y within 0.8)
+    const buckets = [];
+    defs.forEach(d => {
+      const fIdx = fixedAxis(d.ry);
+      const fVal = d.pos[fIdx];
+      const yVal = d.pos[1];
+      const b = buckets.find(b =>
+        fixedAxis(b[0].ry) === fIdx &&
+        Math.abs(b[0].pos[fIdx] - fVal) < 0.3 &&
+        Math.abs(b[0].pos[1]    - yVal) < 0.8
+      );
+      if (b) b.push(d); else buckets.push([d]);
+    });
+
+    buckets.forEach(group => {
+      if (group.length < 2) return;
+      const aIdx = alongAxis(group[0].ry);
+      group.sort((a, b) => a.pos[aIdx] - b.pos[aIdx]);
+      for (let i = 1; i < group.length; i++) {
+        const prev = group[i - 1];
+        const curr = group[i];
+        const need = prev.pos[aIdx] + prev.w / 2 + FW + GAP + curr.w / 2 + FW;
+        if (curr.pos[aIdx] < need) curr.pos[aIdx] = need;
+      }
+    });
+  }
+
   function _buildPaintings() {
+    // Wall thickness = 0.12, half = 0.06.  Inner faces:
+    //   Back walls  at ±ROOM_OUT(35):  inner face at 35-0.06 = 34.94  → use ±34.8
+    //   Side walls  at ±ROOM_HALF(7.5): inner face at 7.5-0.06 = 7.44 → use ±7.3
+    //   Welcome walls at ±WR(8):        inner face at 7.94            → use ±7.8
+
+    // Rotation guide — which face is visible from inside the room:
+    //   ry=0    normal +Z  visible from south  (back of NORTH room)
+    //   ry=π    normal -Z  visible from north  (back of SOUTH room)
+    //   ry=-π/2 normal -X  visible from east   (east wall inner face)
+    //   ry=+π/2 normal +X  visible from west   (west wall inner face)
     const defs = [
-      // Bienvenida (casual, distintos tamanos)
-      { pos: [-5.6, 2.95, -7.93], ry: 0, w: 3.1, h: 3.9 },
-      { pos: [3.9, 2.68, -7.93], ry: 0, w: 2.25, h: 2.75 },
-      { pos: [6.05, 2.36, -7.93], ry: 0, w: 1.15, h: 1.72 },
+      // ── Bienvenida — 4 paredes ───────────────────────────────────────────
+      { pos: [-5.4, 2.9, -7.8],  ry: 0,             w: 3.0,  h: 3.8  },
+      { pos: [ 0.0, 2.7, -7.8],  ry: 0,             w: 2.2,  h: 2.7  },
+      { pos: [ 5.4, 2.4, -7.8],  ry: 0,             w: 1.2,  h: 1.7  },
 
-      { pos: [7.93, 3.04, -5.4], ry: Math.PI / 2, w: 2.85, h: 3.65 },
-      { pos: [7.93, 2.25, 3.9], ry: Math.PI / 2, w: 1.45, h: 2.1 },
-      { pos: [7.93, 2.88, 5.9], ry: Math.PI / 2, w: 1.95, h: 2.45 },
+      { pos: [7.8, 3.0, -5.2],   ry: -Math.PI / 2,  w: 2.8,  h: 3.6  },
+      { pos: [7.8, 2.5,  3.8],   ry: -Math.PI / 2,  w: 1.4,  h: 2.1  },
+      { pos: [7.8, 2.8,  5.8],   ry: -Math.PI / 2,  w: 1.9,  h: 2.4  },
 
-      { pos: [5.1, 3.08, 7.93], ry: Math.PI, w: 2.65, h: 3.8 },
-      { pos: [-3.6, 2.52, 7.93], ry: Math.PI, w: 1.75, h: 2.3 },
-      { pos: [-5.95, 2.22, 7.93], ry: Math.PI, w: 1.2, h: 1.75 },
+      { pos: [ 5.0, 3.0, 7.8],   ry: Math.PI,        w: 2.6,  h: 3.7  },
+      { pos: [-0.5, 2.5, 7.8],   ry: Math.PI,        w: 1.7,  h: 2.3  },
+      { pos: [-5.6, 2.2, 7.8],   ry: Math.PI,        w: 1.2,  h: 1.7  },
 
-      { pos: [-7.93, 2.85, 5.25], ry: -Math.PI / 2, w: 2.2, h: 2.95 },
-      { pos: [-7.93, 2.25, -3.95], ry: -Math.PI / 2, w: 1.35, h: 1.9 },
-      { pos: [-7.93, 3.02, -5.8], ry: -Math.PI / 2, w: 2.7, h: 3.55 },
+      { pos: [-7.8, 2.8,  5.0],  ry:  Math.PI / 2,  w: 2.2,  h: 2.9  },
+      { pos: [-7.8, 2.3, -3.8],  ry:  Math.PI / 2,  w: 1.3,  h: 1.9  },
+      { pos: [-7.8, 3.0, -5.6],  ry:  Math.PI / 2,  w: 2.6,  h: 3.5  },
 
-      // Mes 1 (north)
-      { pos: [-3.1, 2.92, -34.92], ry: 0, w: 1.75, h: 2.08 },
-      { pos: [0, 2.98, -34.92], ry: 0, w: 1.9, h: 2.2 },
-      { pos: [3.1, 2.92, -34.92], ry: 0, w: 1.75, h: 2.08 },
+      // ── Mes 1 (sala norte, z < -24) — fondo + pared este + pared oeste ──
+      // Fondo z=-34.8, ry=0
+      { pos: [-3.0, 3.2, -34.8], ry: 0, w: 2.0, h: 2.5, imgUrl: 'assets/images/1mes1.jpeg',  title: 'El inicio de todo',            message: 'El momento en que te vi por primera vez, algo dentro de mí supo que eras especial. No hay palabra que describa lo que sentí.' },
+      { pos: [ 0.6, 3.4, -34.8], ry: 0, w: 2.2, h: 2.7, imgUrl: 'assets/images/1mes2.jpeg',  title: 'Tu sonrisa',                   message: 'Tu sonrisa es lo primero que pienso cuando despierto y lo último que recuerdo antes de dormir. Eres mi luz favorita.' },
+      { pos: [-3.0, 1.7, -34.8], ry: 0, w: 1.8, h: 2.0, imgUrl: 'assets/images/1mes3.jpeg',  title: 'Momentos eternos',             message: 'Contigo, hasta el silencio se vuelve mágico. Cada momento a tu lado es un recuerdo que guardo en el lugar más bonito de mi corazón.' },
+      { pos: [ 0.6, 1.8, -34.8], ry: 0, w: 2.0, h: 2.2, imgUrl: 'assets/images/1mes4.jpeg',  title: 'Mi lugar favorito',            message: 'En tus brazos encontré el lugar al que siempre quise volver. No importa dónde esté, mientras estés tú, ya llegué a casa.' },
+      // Pared este x=7.3, ry=-π/2 — 3 cuadros a altura uniforme y=2.8
+      { pos: [7.3, 2.8, -26.5],  ry: -Math.PI / 2, w: 1.6, h: 2.0, imgUrl: 'assets/images/1mes5.jpeg',  title: '4 Meses de magia',             message: 'Cuatro meses de risas, de miradas, de sueños compartidos. Cuatro meses que ya parecen toda una vida, porque contigo el tiempo vuela.' },
+      { pos: [7.3, 2.8, -29.6],  ry: -Math.PI / 2, w: 1.8, h: 2.2, imgUrl: 'assets/images/1mes6.jpeg',  title: 'La historia más bonita',       message: 'Eres la historia más hermosa que me ha tocado vivir. Y lo mejor es que apenas estamos en el primer capítulo.' },
+      { pos: [7.3, 2.8, -32.8],  ry: -Math.PI / 2, w: 1.5, h: 1.9, imgUrl: 'assets/images/1mes7.jpeg',  title: 'Gracias por elegirme',         message: 'Gracias por elegirme cada día, con mis locuras y mis defectos. Gracias por hacer de cada día ordinario algo extraordinario.' },
+      // Pared oeste x=-7.3, ry=+π/2 — 3 cuadros a altura uniforme y=2.8
+      { pos: [-7.3, 2.8, -26.5], ry:  Math.PI / 2, w: 1.6, h: 2.0, imgUrl: 'assets/images/1mes8.jpeg',  title: 'Mi corazón encontró su hogar', message: 'No sabía que me faltaba algo hasta que llegaste tú. Ahora no imagino mi mundo sin tu presencia, sin tu voz, sin tu amor.' },
+      { pos: [-7.3, 2.8, -29.6], ry:  Math.PI / 2, w: 1.8, h: 2.2, imgUrl: 'assets/images/1mes9.jpeg',  title: 'Cada instante contigo',        message: 'Guardé cada instante contigo como si fuera un tesoro. Porque lo es. Eres tú, y eso ya lo convierte en lo más valioso que tengo.' },
+      { pos: [-7.3, 2.8, -32.8], ry:  Math.PI / 2, w: 1.5, h: 1.9, imgUrl: 'assets/images/1mes10.jpeg', title: 'El mundo es más bonito',       message: 'Desde que llegaste tú, el mundo tiene un color diferente. Todo brilla un poco más, todo duele un poco menos. Gracias por existir.' },
 
-      // Mes 2 (east)
-      { pos: [34.92, 2.92, -3.1], ry: Math.PI / 2, w: 1.75, h: 2.08 },
-      { pos: [34.92, 2.98, 0], ry: Math.PI / 2, w: 1.9, h: 2.2 },
-      { pos: [34.92, 2.92, 3.1], ry: Math.PI / 2, w: 1.75, h: 2.08 },
+      // ── Mes 2 (sala este, x > 24) — fondo + pared norte + pared sur ─────
+      // Fondo x=34.8, ry=-π/2
+      { pos: [34.8, 3.3, -2.5],  ry: -Math.PI / 2, w: 2.0, h: 2.5, imgUrl: 'assets/images/2mes1.jpeg', title: 'Un mes más cerca',            message: 'Cada día que pasa te conozco un poco más y te quiero un poco más. Eres un universo que nunca termino de descubrir.' },
+      { pos: [34.8, 3.1,  1.5],  ry: -Math.PI / 2, w: 1.8, h: 2.2, imgUrl: 'assets/images/2mes2.jpeg', title: 'Los pequeños momentos',       message: 'Son los pequeños gestos los que me enamoran más: tu forma de reír, de mirarme, de decir mi nombre. En eso está todo.' },
+      { pos: [34.8, 1.8,  0.0],  ry: -Math.PI / 2, w: 1.6, h: 1.9, imgUrl: 'assets/images/2mes3.jpeg', title: 'Mi parte favorita del día',   message: 'Mi momento favorito es cuando sé que voy a verte. Ese instante antes de que llegues ya me pone a sonreír sin querer.' },
+      // Pared norte z=-7.3, ry=0 — 2 cuadros
+      { pos: [27.0, 2.8, -7.3],  ry: 0,             w: 1.6, h: 2.0, imgUrl: 'assets/images/2mes4.jpeg', title: 'Aprendo a amarte',            message: 'Cada día aprendo una forma nueva de amarte que no sabía que existía. Y cada vez que creo que ya sé, me sorprendes otra vez.' },
+      { pos: [31.5, 2.8, -7.3],  ry: 0,             w: 1.8, h: 2.2, imgUrl: 'assets/images/2mes5.jpeg', title: 'Contigo todo es diferente',   message: 'Hay algo en ti que hace que hasta los días comunes se vuelvan especiales. Eres mi manera favorita de pasar el tiempo.' },
+      // Pared sur z=7.3, ry=π — 2 cuadros
+      { pos: [27.0, 2.8,  7.3],  ry: Math.PI,       w: 1.6, h: 2.0, imgUrl: 'assets/images/2mes6.jpeg', title: 'Lo que no se puede explicar', message: 'Hay cosas que no se pueden explicar con palabras, solo se sienten. Lo nuestro es una de esas cosas.' },
+      { pos: [31.5, 2.8,  7.3],  ry: Math.PI,       w: 1.8, h: 2.2, imgUrl: 'assets/images/2mes7.jpeg', title: 'Dos meses, mil razones',      message: 'Dos meses y ya tengo mil razones para elegirte todos los días. Y cada razón pesa más que cualquier duda que pudiera tener.' },
 
-      // Mes 3 (south)
-      { pos: [3.1, 2.92, 34.92], ry: Math.PI, w: 1.75, h: 2.08 },
-      { pos: [0, 2.98, 34.92], ry: Math.PI, w: 1.9, h: 2.2 },
-      { pos: [-3.1, 2.92, 34.92], ry: Math.PI, w: 1.75, h: 2.08 },
+      // ── Mes 3 (sala sur, z > 24) — fondo + pared este + pared oeste ──────
+      // Fondo z=34.8, ry=π
+      { pos: [-2.5, 3.3, 34.8],  ry: Math.PI,       w: 2.0, h: 2.5, imgUrl: 'assets/images/3mes1.jpeg', title: 'Tres meses de nosotros',  message: 'Ya son tres meses y parece que te conociera de toda la vida. Contigo el tiempo no pasa, se queda.' },
+      { pos: [ 2.5, 3.1, 34.8],  ry: Math.PI,       w: 1.8, h: 2.2, imgUrl: 'assets/images/3mes2.jpeg', title: 'Encontré mi hogar en ti', message: 'No importa dónde estemos, contigo me siento en casa. Eres mi lugar favorito en el mundo.' },
+      // Pared este x=7.3, ry=-π/2 — 2 cuadros
+      { pos: [7.3, 2.8, 27.0],   ry: -Math.PI / 2, w: 1.6, h: 2.0, imgUrl: 'assets/images/3mes3.jpeg', title: 'Lo que me das',           message: 'Me das calma cuando todo se siente difícil, me das alegría cuando más lo necesito. Me das lo que nadie más puede dar.' },
+      { pos: [7.3, 2.8, 31.5],   ry: -Math.PI / 2, w: 1.7, h: 2.1, imgUrl: 'assets/images/3mes4.jpeg', title: 'Mi persona',              message: 'Encontré en ti a mi persona, la que hace que todo tenga sentido. La que quiero al lado siempre.' },
+      // Pared oeste x=-7.3, ry=+π/2 — 1 cuadro
+      { pos: [-7.3, 2.8, 29.5],  ry:  Math.PI / 2, w: 1.6, h: 2.0, imgUrl: 'assets/images/3mes5.jpeg', title: 'Gracias por quedarte',    message: 'Gracias por quedarte, por elegirme, por hacer de cada momento algo bonito. Gracias por ser tú.' },
 
-      // Mes 4 (west)
-      { pos: [-34.92, 2.92, 3.1], ry: -Math.PI / 2, w: 1.75, h: 2.08 },
-      { pos: [-34.92, 2.98, 0], ry: -Math.PI / 2, w: 1.9, h: 2.2 },
-      { pos: [-34.92, 2.92, -3.1], ry: -Math.PI / 2, w: 1.75, h: 2.08 },
+      // ── Mes 4 (sala oeste, x < -24) — fondo + pared norte + pared sur ────
+      // Fondo x=-34.8, ry=+π/2
+      { pos: [-34.8, 3.3, -2.5], ry:  Math.PI / 2, w: 2.0, h: 2.5, imgUrl: 'assets/images/mes4x1.jpeg', title: 'Cuatro meses de amor',      message: 'Cuatro meses de crecimiento, de descubrimiento, de amor. Y todavía siento que estamos apenas comenzando.' },
+      { pos: [-34.8, 3.1,  1.5], ry:  Math.PI / 2, w: 1.8, h: 2.2, imgUrl: 'assets/images/mes4x2.jpeg', title: 'Mi futuro tiene tu nombre', message: 'Cuando pienso en el futuro, apareces tú. Y eso me da mucha paz. Quiero todo lo que está por venir, contigo.' },
+      { pos: [-34.8, 1.8,  0.0], ry:  Math.PI / 2, w: 1.6, h: 1.9, imgUrl: 'assets/images/mes4x3.jpeg', title: 'Todo lo que eres',          message: 'Me encanta todo lo que eres: lo que muestras y lo que guardas, lo que dices y lo que callas. Todo.' },
+      // Pared norte z=-7.3, ry=0 — 2 cuadros
+      { pos: [-27.0, 2.8, -7.3], ry: 0,             w: 1.6, h: 2.0, imgUrl: 'assets/images/mes4x4.jpeg', title: 'Lo mejor está por venir',   message: 'Lo más bonito de nosotros es que apenas estamos comenzando. Y si esto es el inicio, no puedo imaginar lo que viene.' },
+      { pos: [-31.5, 2.8, -7.3], ry: 0,             w: 1.8, h: 2.2, imgUrl: 'assets/images/mes4x5.jpeg', title: 'Mi razón favorita',         message: 'Eres mi razón favorita para sonreír cada mañana, para llegar a casa con ganas, para creer en las cosas bonitas.' },
+      // Pared sur z=7.3, ry=π — 2 cuadros
+      { pos: [-27.0, 2.8,  7.3], ry: Math.PI,       w: 1.6, h: 2.0, imgUrl: 'assets/images/mes4x6.jpeg', title: 'Cuatro meses, un corazón',  message: 'Cuatro meses han pasado y cada día me alegra más tenerte a mi lado. Eres lo mejor que me ha pasado.' },
+      { pos: [-31.5, 2.8,  7.3], ry: Math.PI,       w: 1.8, h: 2.2, imgUrl: 'assets/images/mes4x7.jpeg', title: 'Para siempre',              message: 'Si pudiera elegir una y otra vez, siempre te elegiría a ti. Sin dudar, sin pensarlo. Siempre tú.' },
     ];
+
+    // Resolve any remaining overlaps before building
+    _autoSpreadPaintings(defs);
 
     const imgURLs = typeof FRAMES_DATA !== 'undefined'
       ? FRAMES_DATA.map(f => f.image)
@@ -564,7 +649,8 @@ const Museum3D = (() => {
     const loader = new THREE.TextureLoader();
     defs.forEach((d, i) => {
       const idx = i % imgURLs.length;
-      loader.load(imgURLs[idx], tex => {
+      const url = d.imgUrl || imgURLs[idx];
+      loader.load(url, tex => {
         tex.encoding = THREE.sRGBEncoding;
         const glowKey = `fgp${i}`;
 
@@ -574,7 +660,11 @@ const Museum3D = (() => {
         );
         pm.position.set(...d.pos);
         pm.rotation.y = d.ry;
-        pm.userData = { isPainting: true, paintingIndex: idx, frameGlowKey: glowKey };
+        // Store painting-specific data for direct popup display
+        const paintingData = d.imgUrl
+          ? { image: d.imgUrl, title: d.title || '', message: d.message || '' }
+          : { image: imgURLs[idx], title: (typeof FRAMES_DATA !== 'undefined' ? FRAMES_DATA[idx].title : ''), message: (typeof FRAMES_DATA !== 'undefined' ? FRAMES_DATA[idx].message : '') };
+        pm.userData = { isPainting: true, paintingIndex: idx, frameGlowKey: glowKey, paintingData };
         scene.add(pm);
         paintings.push(pm);
 
@@ -758,10 +848,13 @@ const Museum3D = (() => {
         depthWrite: false,
       }));
       plaque.scale.set(2.4, 0.66, 1);
+      const corridorEntrance = 8.3;
       if (t.axis === 'z') {
-        plaque.position.set(t.center[0], 3.55, t.panel + (t.panel > 0 ? -0.2 : 0.2));
+        const zSign = t.panel < 0 ? -1 : 1;
+        plaque.position.set(t.center[0], 3.55, zSign * corridorEntrance);
       } else {
-        plaque.position.set(t.panel + (t.panel > 0 ? -0.2 : 0.2), 3.55, t.center[1]);
+        const xSign = t.panel < 0 ? -1 : 1;
+        plaque.position.set(xSign * corridorEntrance, 3.55, t.center[1]);
       }
       scene.add(plaque);
       A[`${t.key}Plaque`] = plaque;
@@ -863,30 +956,38 @@ const Museum3D = (() => {
     };
     document.addEventListener('pointerlockchange', H_map.plc);
 
-    // Click: first try to hit a painting from actual mouse position,
-    // then fall back to pointer-lock toggle for look/walk control
+    // Click: first try to hit a painting, then toggle pointer lock
+    let _clickCooldown = false;
     H_map.click = e => {
-      if (isMob) return; // mobile handled by touch
+      if (isMob) return;
 
-      // Raycast from real mouse position (works locked or free)
+      // Don't process clicks through the room-entry popup
+      const roomOverlay = document.getElementById('room-popup-overlay');
+      if (roomOverlay && roomOverlay.classList.contains('active')) return;
+
       const rect = cv.getBoundingClientRect();
       const mx   =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
       const my   = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
       _ray.setFromCamera({ x: mx, y: my }, camera);
-      const hits = _ray.intersectObjects(paintings);
+      const hits = _ray.intersectObjects(paintings, false);
 
       if (hits.length > 0 && hits[0].distance <= INTERACT_DISTANCE) {
-        // Hit a painting — open its popup
-        const idx = hits[0].object.userData.paintingIndex;
+        if (_clickCooldown) return;
+        _clickCooldown = true;
+        setTimeout(() => { _clickCooldown = false; }, 700);
+
+        const pData = hits[0].object.userData.paintingData;
         if (locked) document.exitPointerLock();
-        setTimeout(() => {
-          if (typeof PopupController !== 'undefined') PopupController.open(idx);
-          document.body.style.overflow = '';
-        }, locked ? 90 : 0);
+
+        const open = () => {
+          if (typeof PopupController !== 'undefined' && pData) {
+            PopupController.openDirect(pData);
+          }
+        };
+        locked ? setTimeout(open, 100) : open();
         return;
       }
 
-      // No painting hit — request pointer lock to enable look/walk
       if (!locked) cv.requestPointerLock();
     };
     cv.addEventListener('click', H_map.click);
@@ -1100,6 +1201,7 @@ const Museum3D = (() => {
     _move(dt);
     _raycast();
     _updateMinimap();
+    _detectRoom();
 
     // Candle flicker
     if (A.candleLights) {
@@ -1353,6 +1455,69 @@ const Museum3D = (() => {
     gd.addColorStop(1,   `rgba(${r},${g},${b},0)`);
     c.fillStyle = gd; c.fillRect(0,0,128,128);
     return new THREE.CanvasTexture(cv);
+  }
+
+  /* ── room entry detection ───────────────────────────────────────────────── */
+  const _ROOM_MESSAGES = {
+    month1: {
+      title: '✦ Primer Mes ✦',
+      text:  'En este primer mes comenzó una historia que nunca imaginé. Cada momento contigo ha sido un regalo, cada sonrisa tuya un tesoro que guardo en el lugar más especial de mi corazón. Gracias por dejar que esta historia comenzara.',
+    },
+    month2: {
+      title: '✦ Segundo Mes ✦',
+      text:  'El segundo mes trajo consigo más razones para amarte. Fui descubriendo pequeños detalles tuyos que hacen que todo sea más bonito. Tu presencia se convirtió en la parte favorita de mis días, en ese rincón del corazón que siempre espera verte.',
+    },
+    month3: {
+      title: '✦ Tercer Mes ✦',
+      text:  'Ya en el tercer mes, tu compañía se volvió tan natural como respirar. Contigo aprendí que el amor no necesita grandes gestos, solo los pequeños momentos que hacen que la vida tenga un sabor diferente, más dulce, más tuyo.',
+    },
+    month4: {
+      title: '✦ Cuarto Mes ✦',
+      text:  'Cuatro meses de aprender que contigo quiero hacer miles de cosas. De descubrir que mi lugar favorito en el mundo es donde sea que estés tú. Gracias por estos cuatro meses llenos de ti, de nosotros, de todo lo que está por venir.',
+    },
+  };
+
+  function _detectRoom() {
+    if (!camera) return;
+    const x = camera.position.x;
+    const z = camera.position.z;
+
+    let room = 'welcome';
+    if (Math.abs(x) < 7.5 && z < -24) room = 'month1';
+    else if (x > 24 && Math.abs(z) < 7.5) room = 'month2';
+    else if (Math.abs(x) < 7.5 && z > 24) room = 'month3';
+    else if (x < -24 && Math.abs(z) < 7.5) room = 'month4';
+
+    if (room !== _currentRoom) {
+      _currentRoom = room;
+      if (room !== 'welcome') {
+        setTimeout(() => _showRoomPopup(room), 400);
+      }
+    }
+  }
+
+  function _showRoomPopup(room) {
+    const data    = _ROOM_MESSAGES[room];
+    const overlay = document.getElementById('room-popup-overlay');
+    const titleEl = document.getElementById('room-popup-month');
+    const textEl  = document.getElementById('room-popup-text');
+    if (!overlay || !data) return;
+
+    titleEl.textContent = data.title;
+    textEl.textContent  = data.text;
+    overlay.classList.add('active');
+
+    const btn = document.getElementById('room-popup-close');
+    let _autoClose;
+
+    const close = () => {
+      clearTimeout(_autoClose);
+      overlay.classList.remove('active');
+      btn.removeEventListener('click', close);
+    };
+    btn.addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); }, { once: true });
+    _autoClose = setTimeout(close, 10000);
   }
 
   return { init, destroy };

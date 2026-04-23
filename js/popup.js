@@ -3,42 +3,42 @@ const FRAMES_DATA = [
   {
     title:   "El inicio de todo",
     message: "El momento en que te vi por primera vez, algo dentro de mí supo que eras especial. No hay palabra que describa lo que sentí.",
-    image:   "https://picsum.photos/seed/aurora1/300/360",
+    image:   "assets/images/1mes1.jpeg",
   },
   {
     title:   "Tu sonrisa",
     message: "Tu sonrisa es lo primero que pienso cuando despierto y lo último que recuerdo antes de dormir. Eres mi luz favorita.",
-    image:   "https://picsum.photos/seed/nebula2/380/420",
+    image:   "assets/images/1mes2.jpeg",
   },
   {
     title:   "Momentos eternos",
     message: "Contigo, hasta el silencio se vuelve mágico. Cada momento a tu lado es un recuerdo que guardo en el lugar más bonito de mi corazón.",
-    image:   "https://picsum.photos/seed/cosmos3/300/370",
+    image:   "assets/images/1mes3.jpeg",
   },
   {
     title:   "Mi lugar favorito",
     message: "En tus brazos encontré el lugar al que siempre quise volver. No importa dónde esté, mientras estés tú, ya llegué a casa.",
-    image:   "https://picsum.photos/seed/galaxy4/230/280",
+    image:   "assets/images/1mes4.jpeg",
   },
   {
     title:   "4 Meses de magia",
     message: "Cuatro meses de risas, de miradas, de sueños compartidos. Cuatro meses que ya parecen toda una vida, porque contigo el tiempo vuela.",
-    image:   "https://picsum.photos/seed/star5/330/400",
+    image:   "assets/images/1mes5.jpeg",
   },
   {
     title:   "La historia más bonita",
     message: "Eres la historia más hermosa que me ha tocado vivir. Y lo mejor es que apenas estamos en el primer capítulo.",
-    image:   "https://picsum.photos/seed/violet6/310/350",
+    image:   "assets/images/1mes6.jpeg",
   },
   {
     title:   "Gracias por elegirme",
     message: "Gracias por elegirme cada día, con mis locuras y mis defectos. Gracias por hacer de cada día ordinario algo extraordinario.",
-    image:   "https://picsum.photos/seed/bloom7/330/400",
+    image:   "assets/images/1mes7.jpeg",
   },
   {
     title:   "Mi corazón encontró su hogar",
     message: "No sabía que me faltaba algo hasta que llegaste tú. Ahora no imagino mi mundo sin tu presencia, sin tu voz, sin tu amor.",
-    image:   "https://picsum.photos/seed/night8/200/250",
+    image:   "assets/images/1mes8.jpeg",
   },
 ];
 
@@ -120,21 +120,15 @@ const PopupController = (() => {
     }
   }
 
-  function open(index) {
-    if (isOpen && activeIndex === index) return;
-
-    const data      = FRAMES_DATA[index];
-    activeIndex     = index;
-    isOpen          = true;
-
-    imgEl.src      = data.image;
-    imgEl.alt      = data.title;
+  function _applyData(data) {
+    imgEl.src            = data.image;
+    imgEl.alt            = data.title;
     titleEl.textContent  = data.title;
     msgEl.textContent    = data.message;
 
     overlay.classList.add('active');
+    isOpen = true;
 
-    // Anime.js entrance
     anime({
       targets: [titleEl, msgEl],
       opacity: [0, 1],
@@ -153,14 +147,25 @@ const PopupController = (() => {
       easing: 'easeOutBack',
     });
 
-    // Spawn particles after short delay
     clearTimeout(heartTimeout);
     clearTimeout(starTimeout);
     starTimeout  = setTimeout(spawnStars,  50);
     heartTimeout = setTimeout(spawnHearts, 300);
 
-    // Prevent body scroll
     if (typeof Transition === 'undefined' || !Transition.isIn3D()) document.body.style.overflow = 'hidden';
+  }
+
+  function open(index) {
+    if (isOpen && activeIndex === index) return;
+    activeIndex = index;
+    _applyData(FRAMES_DATA[index]);
+  }
+
+  function openDirect(data) {
+    const wasOpen = isOpen;
+    if (wasOpen) close();
+    activeIndex = -1;
+    setTimeout(() => _applyData(data), wasOpen ? 380 : 0);
   }
 
   function close() {
@@ -203,5 +208,5 @@ const PopupController = (() => {
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
 
-  return { open, close, bindFrames };
+  return { open, openDirect, close, bindFrames };
 })();

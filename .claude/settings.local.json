@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp \"/c/Users/AsusTUF/OneDrive/Escritorio/4meses/.claude/worktrees/flamboyant-cray-6f758d/css/style.css\" \"/c/Users/AsusTUF/OneDrive/Escritorio/4meses/css/style.css\")",
+      "Bash(cp \"/c/Users/AsusTUF/OneDrive/Escritorio/4meses/.claude/worktrees/flamboyant-cray-6f758d/css/museum3d.css\" \"/c/Users/AsusTUF/OneDrive/Escritorio/4meses/css/museum3d.css\")",
+      "Bash(cp \"/c/Users/AsusTUF/OneDrive/Escritorio/4meses/.claude/worktrees/flamboyant-cray-6f758d/js/aurora.js\" \"/c/Users/AsusTUF/OneDrive/Escritorio/4meses/js/aurora.js\")",
+      "Bash(cp \"/c/Users/AsusTUF/OneDrive/Escritorio/4meses/.claude/worktrees/flamboyant-cray-6f758d/js/transition.js\" \"/c/Users/AsusTUF/OneDrive/Escritorio/4meses/js/transition.js\")",
+      "Bash(cp \"/c/Users/AsusTUF/OneDrive/Escritorio/4meses/.claude/worktrees/flamboyant-cray-6f758d/js/app.js\" \"/c/Users/AsusTUF/OneDrive/Escritorio/4meses/js/app.js\")"
+    ]
+  }
+}
