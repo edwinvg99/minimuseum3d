@@ -563,72 +563,168 @@ const Museum3D = (() => {
     //   ry=π    normal -Z  visible from north  (back of SOUTH room)
     //   ry=-π/2 normal -X  visible from east   (east wall inner face)
     //   ry=+π/2 normal +X  visible from west   (west wall inner face)
+    // ─────────────────────────────────────────────────────────────────────────
+    // GUÍA DE POSICIONES  pos: [X, Y, Z]
+    //   X  positivo = este  │ negativo = oeste
+    //   Y  altura (ojo del jugador ≈ 1.7, techo ≈ 6.2)
+    //   Z  positivo = sur   │ negativo = norte
+    //
+    // Límites de cada sala (paredes interiores):
+    //   Sala NORTE (mes1): X ∈ [-7.3, 7.3]  Z ∈ [-34.8, -25]
+    //   Sala SUR   (mes3): X ∈ [-7.3, 7.3]  Z ∈ [ 25,  34.8]
+    //   Sala ESTE  (mes2): Z ∈ [-7.3,  7.3]  X ∈ [ 25,  34.8]
+    //   Sala OESTE (mes4): Z ∈ [-7.3,  7.3]  X ∈ [-34.8, -25]
+    //   Bienvenida:        X ∈ [-7.8,  7.8]  Z ∈ [-7.8,  7.8]
+    //     (corredor norte/sur: X ∈ [-1.6, 1.6]  →  NO colocar cuadros ahí)
+    //     (corredor este/oeste: Z ∈ [-1.6, 1.6] →  NO colocar cuadros ahí)
+    //
+    // ry indica hacia dónde apunta el frente del cuadro:
+    //   ry = 0          → frente al SUR  (pared norte,  fondo mes1)
+    //   ry = Math.PI    → frente al NORTE (pared sur,   fondo mes3)
+    //   ry = -Math.PI/2 → frente al OESTE (pared este,  fondo mes2 / laterales mes1 y mes3)
+    //   ry = +Math.PI/2 → frente al ESTE  (pared oeste, fondo mes4 / laterales mes1 y mes3)
+    //
+    // w = ancho del cuadro   h = alto del cuadro   (en unidades del mundo)
+    // ─────────────────────────────────────────────────────────────────────────
     const defs = [
-      // ── Bienvenida — 4 paredes ───────────────────────────────────────────
-      { pos: [-5.4, 2.9, -7.8],  ry: 0,             w: 3.0,  h: 3.8  },
-      { pos: [ 0.0, 2.7, -7.8],  ry: 0,             w: 2.2,  h: 2.7  },
-      { pos: [ 5.4, 2.4, -7.8],  ry: 0,             w: 1.2,  h: 1.7  },
 
-      { pos: [7.8, 3.0, -5.2],   ry: -Math.PI / 2,  w: 2.8,  h: 3.6  },
-      { pos: [7.8, 2.5,  3.8],   ry: -Math.PI / 2,  w: 1.4,  h: 2.1  },
-      { pos: [7.8, 2.8,  5.8],   ry: -Math.PI / 2,  w: 1.9,  h: 2.4  },
+      // ══════════════════════════════════════════════════════════════════════
+      // SALA DE BIENVENIDA
+      // ══════════════════════════════════════════════════════════════════════
 
-      { pos: [ 5.0, 3.0, 7.8],   ry: Math.PI,        w: 2.6,  h: 3.7  },
-      { pos: [-0.5, 2.5, 7.8],   ry: Math.PI,        w: 1.7,  h: 2.3  },
-      { pos: [-5.6, 2.2, 7.8],   ry: Math.PI,        w: 1.2,  h: 1.7  },
+      // -- Pared NORTE de bienvenida (z fijo ≈ -7.8, varía X) --
+      // ⚠ Evitar X ∈ [-2.6, 2.6] — es el hueco del corredor hacia MES 1
+      // Cuadro B-N-1  (izquierda)
+      { pos: [-5.4, 2.9, -7.8],  ry: 0,            w: 3.0, h: 3.8 },
+      // Cuadro B-N-2  (derecha, alejado del centro)
+      { pos: [ 4.0, 2.7, -7.8],  ry: 0,            w: 2.2, h: 2.7 },
+      // Cuadro B-N-3  (extremo derecho)
+      { pos: [ 6.6, 2.4, -7.8],  ry: 0,            w: 1.2, h: 1.7 },
 
-      { pos: [-7.8, 2.8,  5.0],  ry:  Math.PI / 2,  w: 2.2,  h: 2.9  },
-      { pos: [-7.8, 2.3, -3.8],  ry:  Math.PI / 2,  w: 1.3,  h: 1.9  },
-      { pos: [-7.8, 3.0, -5.6],  ry:  Math.PI / 2,  w: 2.6,  h: 3.5  },
+      // -- Pared ESTE de bienvenida (x fijo ≈ 7.8, varía Z) --
+      // ⚠ Evitar Z ∈ [-2.6, 2.6] — hueco del corredor hacia MES 2
+      // Cuadro B-E-1  (norte)
+      { pos: [7.8, 3.0, -5.2],   ry: -Math.PI / 2, w: 2.8, h: 3.6 },
+      // Cuadro B-E-2  (sur)
+      { pos: [7.8, 2.5,  3.8],   ry: -Math.PI / 2, w: 1.4, h: 2.1 },
+      // Cuadro B-E-3  (extremo sur)
+      { pos: [7.8, 2.8,  5.8],   ry: -Math.PI / 2, w: 1.9, h: 2.4 },
 
-      // ── Mes 1 (sala norte, z < -24) — fondo + pared este + pared oeste ──
-      // Fondo z=-34.8, ry=0
-      { pos: [-3.0, 3.2, -34.8], ry: 0, w: 2.0, h: 2.5, imgUrl: 'assets/images/1mes1.jpeg',  title: 'El inicio de todo',            message: 'El momento en que te vi por primera vez, algo dentro de mí supo que eras especial. No hay palabra que describa lo que sentí.' },
-      { pos: [ 0.6, 3.4, -34.8], ry: 0, w: 2.2, h: 2.7, imgUrl: 'assets/images/1mes2.jpeg',  title: 'Tu sonrisa',                   message: 'Tu sonrisa es lo primero que pienso cuando despierto y lo último que recuerdo antes de dormir. Eres mi luz favorita.' },
-      { pos: [-3.0, 1.7, -34.8], ry: 0, w: 1.8, h: 2.0, imgUrl: 'assets/images/1mes3.jpeg',  title: 'Momentos eternos',             message: 'Contigo, hasta el silencio se vuelve mágico. Cada momento a tu lado es un recuerdo que guardo en el lugar más bonito de mi corazón.' },
-      { pos: [ 0.6, 1.8, -34.8], ry: 0, w: 2.0, h: 2.2, imgUrl: 'assets/images/1mes4.jpeg',  title: 'Mi lugar favorito',            message: 'En tus brazos encontré el lugar al que siempre quise volver. No importa dónde esté, mientras estés tú, ya llegué a casa.' },
-      // Pared este x=7.3, ry=-π/2 — 3 cuadros a altura uniforme y=2.8
-      { pos: [7.3, 2.8, -26.5],  ry: -Math.PI / 2, w: 1.6, h: 2.0, imgUrl: 'assets/images/1mes5.jpeg',  title: '4 Meses de magia',             message: 'Cuatro meses de risas, de miradas, de sueños compartidos. Cuatro meses que ya parecen toda una vida, porque contigo el tiempo vuela.' },
-      { pos: [7.3, 2.8, -29.6],  ry: -Math.PI / 2, w: 1.8, h: 2.2, imgUrl: 'assets/images/1mes6.jpeg',  title: 'La historia más bonita',       message: 'Eres la historia más hermosa que me ha tocado vivir. Y lo mejor es que apenas estamos en el primer capítulo.' },
-      { pos: [7.3, 2.8, -32.8],  ry: -Math.PI / 2, w: 1.5, h: 1.9, imgUrl: 'assets/images/1mes7.jpeg',  title: 'Gracias por elegirme',         message: 'Gracias por elegirme cada día, con mis locuras y mis defectos. Gracias por hacer de cada día ordinario algo extraordinario.' },
-      // Pared oeste x=-7.3, ry=+π/2 — 3 cuadros a altura uniforme y=2.8
-      { pos: [-7.3, 2.8, -26.5], ry:  Math.PI / 2, w: 1.6, h: 2.0, imgUrl: 'assets/images/1mes8.jpeg',  title: 'Mi corazón encontró su hogar', message: 'No sabía que me faltaba algo hasta que llegaste tú. Ahora no imagino mi mundo sin tu presencia, sin tu voz, sin tu amor.' },
-      { pos: [-7.3, 2.8, -29.6], ry:  Math.PI / 2, w: 1.8, h: 2.2, imgUrl: 'assets/images/1mes9.jpeg',  title: 'Cada instante contigo',        message: 'Guardé cada instante contigo como si fuera un tesoro. Porque lo es. Eres tú, y eso ya lo convierte en lo más valioso que tengo.' },
-      { pos: [-7.3, 2.8, -32.8], ry:  Math.PI / 2, w: 1.5, h: 1.9, imgUrl: 'assets/images/1mes10.jpeg', title: 'El mundo es más bonito',       message: 'Desde que llegaste tú, el mundo tiene un color diferente. Todo brilla un poco más, todo duele un poco menos. Gracias por existir.' },
+      // -- Pared SUR de bienvenida (z fijo ≈ 7.8, varía X) --
+      // ⚠ Evitar X ∈ [-2.6, 2.6] — hueco del corredor hacia MES 3
+      // Cuadro B-S-1  (derecha)
+      { pos: [ 5.0, 3.0,  7.8],  ry: Math.PI,      w: 2.6, h: 3.7 },
+      // Cuadro B-S-2  (izquierda, alejado del centro)
+      { pos: [-3.8, 2.5,  7.8],  ry: Math.PI,      w: 1.7, h: 2.3 },
+      // Cuadro B-S-3  (extremo izquierdo)
+      { pos: [-6.2, 2.2,  7.8],  ry: Math.PI,      w: 1.2, h: 1.7 },
 
-      // ── Mes 2 (sala este, x > 24) — fondo + pared norte + pared sur ─────
-      // Fondo x=34.8, ry=-π/2
-      { pos: [34.8, 3.3, -2.5],  ry: -Math.PI / 2, w: 2.0, h: 2.5, imgUrl: 'assets/images/2mes1.jpeg', title: 'Un mes más cerca',            message: 'Cada día que pasa te conozco un poco más y te quiero un poco más. Eres un universo que nunca termino de descubrir.' },
-      { pos: [34.8, 3.1,  1.5],  ry: -Math.PI / 2, w: 1.8, h: 2.2, imgUrl: 'assets/images/2mes2.jpeg', title: 'Los pequeños momentos',       message: 'Son los pequeños gestos los que me enamoran más: tu forma de reír, de mirarme, de decir mi nombre. En eso está todo.' },
-      { pos: [34.8, 1.8,  0.0],  ry: -Math.PI / 2, w: 1.6, h: 1.9, imgUrl: 'assets/images/2mes3.jpeg', title: 'Mi parte favorita del día',   message: 'Mi momento favorito es cuando sé que voy a verte. Ese instante antes de que llegues ya me pone a sonreír sin querer.' },
-      // Pared norte z=-7.3, ry=0 — 2 cuadros
-      { pos: [27.0, 2.8, -7.3],  ry: 0,             w: 1.6, h: 2.0, imgUrl: 'assets/images/2mes4.jpeg', title: 'Aprendo a amarte',            message: 'Cada día aprendo una forma nueva de amarte que no sabía que existía. Y cada vez que creo que ya sé, me sorprendes otra vez.' },
-      { pos: [31.5, 2.8, -7.3],  ry: 0,             w: 1.8, h: 2.2, imgUrl: 'assets/images/2mes5.jpeg', title: 'Contigo todo es diferente',   message: 'Hay algo en ti que hace que hasta los días comunes se vuelvan especiales. Eres mi manera favorita de pasar el tiempo.' },
-      // Pared sur z=7.3, ry=π — 2 cuadros
-      { pos: [27.0, 2.8,  7.3],  ry: Math.PI,       w: 1.6, h: 2.0, imgUrl: 'assets/images/2mes6.jpeg', title: 'Lo que no se puede explicar', message: 'Hay cosas que no se pueden explicar con palabras, solo se sienten. Lo nuestro es una de esas cosas.' },
-      { pos: [31.5, 2.8,  7.3],  ry: Math.PI,       w: 1.8, h: 2.2, imgUrl: 'assets/images/2mes7.jpeg', title: 'Dos meses, mil razones',      message: 'Dos meses y ya tengo mil razones para elegirte todos los días. Y cada razón pesa más que cualquier duda que pudiera tener.' },
+      // -- Pared OESTE de bienvenida (x fijo ≈ -7.8, varía Z) --
+      // ⚠ Evitar Z ∈ [-2.6, 2.6] — hueco del corredor hacia MES 4
+      // Cuadro B-O-1  (sur)
+      { pos: [-7.8, 2.8,  5.0],  ry:  Math.PI / 2, w: 2.2, h: 2.9 },
+      // Cuadro B-O-2  (norte)
+      { pos: [-7.8, 2.3, -3.8],  ry:  Math.PI / 2, w: 1.3, h: 1.9 },
+      // Cuadro B-O-3  (extremo norte)
+      { pos: [-7.8, 3.0, -5.6],  ry:  Math.PI / 2, w: 2.6, h: 3.5 },
 
-      // ── Mes 3 (sala sur, z > 24) — fondo + pared este + pared oeste ──────
-      // Fondo z=34.8, ry=π
-      { pos: [-2.5, 3.3, 34.8],  ry: Math.PI,       w: 2.0, h: 2.5, imgUrl: 'assets/images/3mes1.jpeg', title: 'Tres meses de nosotros',  message: 'Ya son tres meses y parece que te conociera de toda la vida. Contigo el tiempo no pasa, se queda.' },
-      { pos: [ 2.5, 3.1, 34.8],  ry: Math.PI,       w: 1.8, h: 2.2, imgUrl: 'assets/images/3mes2.jpeg', title: 'Encontré mi hogar en ti', message: 'No importa dónde estemos, contigo me siento en casa. Eres mi lugar favorito en el mundo.' },
-      // Pared este x=7.3, ry=-π/2 — 2 cuadros
-      { pos: [7.3, 2.8, 27.0],   ry: -Math.PI / 2, w: 1.6, h: 2.0, imgUrl: 'assets/images/3mes3.jpeg', title: 'Lo que me das',           message: 'Me das calma cuando todo se siente difícil, me das alegría cuando más lo necesito. Me das lo que nadie más puede dar.' },
-      { pos: [7.3, 2.8, 31.5],   ry: -Math.PI / 2, w: 1.7, h: 2.1, imgUrl: 'assets/images/3mes4.jpeg', title: 'Mi persona',              message: 'Encontré en ti a mi persona, la que hace que todo tenga sentido. La que quiero al lado siempre.' },
-      // Pared oeste x=-7.3, ry=+π/2 — 1 cuadro
-      { pos: [-7.3, 2.8, 29.5],  ry:  Math.PI / 2, w: 1.6, h: 2.0, imgUrl: 'assets/images/3mes5.jpeg', title: 'Gracias por quedarte',    message: 'Gracias por quedarte, por elegirme, por hacer de cada momento algo bonito. Gracias por ser tú.' },
+      // ══════════════════════════════════════════════════════════════════════
+      // MES 1  —  sala NORTE  (z va de -25 hacia -34.8)
+      // ══════════════════════════════════════════════════════════════════════
 
-      // ── Mes 4 (sala oeste, x < -24) — fondo + pared norte + pared sur ────
-      // Fondo x=-34.8, ry=+π/2
-      { pos: [-34.8, 3.3, -2.5], ry:  Math.PI / 2, w: 2.0, h: 2.5, imgUrl: 'assets/images/mes4x1.jpeg', title: 'Cuatro meses de amor',      message: 'Cuatro meses de crecimiento, de descubrimiento, de amor. Y todavía siento que estamos apenas comenzando.' },
-      { pos: [-34.8, 3.1,  1.5], ry:  Math.PI / 2, w: 1.8, h: 2.2, imgUrl: 'assets/images/mes4x2.jpeg', title: 'Mi futuro tiene tu nombre', message: 'Cuando pienso en el futuro, apareces tú. Y eso me da mucha paz. Quiero todo lo que está por venir, contigo.' },
-      { pos: [-34.8, 1.8,  0.0], ry:  Math.PI / 2, w: 1.6, h: 1.9, imgUrl: 'assets/images/mes4x3.jpeg', title: 'Todo lo que eres',          message: 'Me encanta todo lo que eres: lo que muestras y lo que guardas, lo que dices y lo que callas. Todo.' },
-      // Pared norte z=-7.3, ry=0 — 2 cuadros
-      { pos: [-27.0, 2.8, -7.3], ry: 0,             w: 1.6, h: 2.0, imgUrl: 'assets/images/mes4x4.jpeg', title: 'Lo mejor está por venir',   message: 'Lo más bonito de nosotros es que apenas estamos comenzando. Y si esto es el inicio, no puedo imaginar lo que viene.' },
-      { pos: [-31.5, 2.8, -7.3], ry: 0,             w: 1.8, h: 2.2, imgUrl: 'assets/images/mes4x5.jpeg', title: 'Mi razón favorita',         message: 'Eres mi razón favorita para sonreír cada mañana, para llegar a casa con ganas, para creer en las cosas bonitas.' },
-      // Pared sur z=7.3, ry=π — 2 cuadros
-      { pos: [-27.0, 2.8,  7.3], ry: Math.PI,       w: 1.6, h: 2.0, imgUrl: 'assets/images/mes4x6.jpeg', title: 'Cuatro meses, un corazón',  message: 'Cuatro meses han pasado y cada día me alegra más tenerte a mi lado. Eres lo mejor que me ha pasado.' },
-      { pos: [-31.5, 2.8,  7.3], ry: Math.PI,       w: 1.8, h: 2.2, imgUrl: 'assets/images/mes4x7.jpeg', title: 'Para siempre',              message: 'Si pudiera elegir una y otra vez, siempre te elegiría a ti. Sin dudar, sin pensarlo. Siempre tú.' },
+      // -- Pared del FONDO (z fijo ≈ -34.8, varía X) --
+      // Cuadro 1-F-1  (izquierda arriba)
+      { pos: [0, 3.2, -34.8], ry: 0, w: 3, h: 2.5, imgUrl: 'assets/images/1mes1.jpeg',  title: 'Ganador',            message: 'Ese día te alegraste por ganarme en dominó, y solo por ver tu hermosa sonrisa fui yo el ganador 🤍' },
+      // Cuadro 1-F-2  (derecha arriba)
+      { pos: [ -3, 3.2, -34.8], ry: 0, w: 3, h: 4, imgUrl: 'assets/images/1mes2.jpeg',  title: 'El proceso',                   message: 'Amo los momentos previos de hacer o vivir algo juntos; no solo disfruto la actividad, la hermosa vista de un mirador o una deliciosa comida, disfruto cada momento a tu lado, ese camino antes de llegar al destino, amo vivir el proceso contigo 💕' },
+      // Cuadro 1-F-3  (izquierda abajo)
+      { pos: [-5.6, 3.2, -34.8], ry: 0, w: 2, h: 2, imgUrl: 'assets/images/1mes3.jpeg',  title: 'La oblea',             message: 'Me encantó buscar obleas en puestos de sancochos contigo 🫕' },
+      // Cuadro 1-F-4  (derecha abajo)
+      { pos: [ 1.1, 3.2, -34.8], ry: 0, w: 3.5, h: 3.5, imgUrl: 'assets/images/1mes4.jpeg',  title: 'Los ojos mas hermosos del mundo',            message: 'Me encanta lo que me hace sentir tu mirada; esos hermosos ojitos que, sin decir una palabra, me llenan de amor 👀💕' },
+
+      // -- Pared ESTE de mes1 (x fijo ≈ 7.3, varía Z negativo) --
+      // Cuadro 1-E-1  (más cerca de la entrada)
+      { pos: [7.3, 2.8, -26.5],  ry: -Math.PI / 2, w: 1.6, h: 2.0, imgUrl: 'assets/images/1mes5.jpeg',  title: 'El picacho',             message: 'El primer mirador al que fuimos no solo nos regaló una vista increíble, sino también el inicio de recuerdos que siempre voy a querer volver a mirar contigo 🌃' },
+      // Cuadro 1-E-2  (medio)
+      { pos: [7.3, 2.8, -29.6],  ry: -Math.PI / 2, w: 1.8, h: 2.2, imgUrl: 'assets/images/1mes6.jpeg',  title: 'Copito',       message: 'Copito no era solo un detalle, era una forma de abrazarte incluso cuando no pudiera estar al lado tuyo 🫂' },
+      // Cuadro 1-E-3  (más cerca del fondo)
+      { pos: [7.3, 2.8, -32.8],  ry: -Math.PI / 2, w: 1.5, h: 1.9, imgUrl: 'assets/images/1mes7.jpeg',  title: 'Lo que siento por ti',         message: 'Me encanta dejar besos en tu frente, porque en cada uno va todo lo que siento por ti: cariño, cuidado y un amor que quiero que siempre te acompañe 🤍' },
+
+      // -- Pared OESTE de mes1 (x fijo ≈ -7.3, varía Z negativo) --
+      // Cuadro 1-O-1  (más cerca de la entrada)
+      { pos: [-7.3, 2.8, -26.5], ry:  Math.PI / 2, w: 1.6, h: 2.0, imgUrl: 'assets/images/1mes8.jpeg',  title: 'Guacala', message: 'Hasta esas hamburguesas tan malucas se volvieron un buen recuerdo, porque lo mejor de ese momento eras tú riéndote conmigo 🍔✨' },
+      // Cuadro 1-O-2  (medio)
+      { pos: [-7.3, 2.8, -29.6], ry:  Math.PI / 2, w: 1.8, h: 2.2, imgUrl: 'assets/images/1mes9.jpeg',  title: 'El inicio',        message: 'El día que te pedí ser mi novia estaba lleno de nervios. No sabía si lo estaba haciendo de la mejor manera, si era el momento perfecto o si te gustaría… pero de lo que nunca dudé fue de que quería que fueras tú. Y sigo queriendo que sea así, por siempre ❤️💐' },
+      // Cuadro 1-O-3  (más cerca del fondo)
+      { pos: [-7.3, 2.8, -32.8], ry:  Math.PI / 2, w: 1.5, h: 1.9, imgUrl: 'assets/images/1mes10.jpeg', title: 'Todo es mas lindo a tu lado',       message: 'Ese día me encantó perderme contigo, despertar un gamincito de su "cama" jajkjha, y jugar vóley entre risas, mi familia y nuestro amor 🥰' },
+
+      // ══════════════════════════════════════════════════════════════════════
+      // MES 2  —  sala ESTE  (x va de 25 hacia 34.8)
+      // ══════════════════════════════════════════════════════════════════════
+
+      // -- Pared del FONDO (x fijo ≈ 34.8, varía Z) --
+      // Cuadro 2-F-1  (norte arriba)
+      { pos: [34.8, 3.3, -2.5],  ry: -Math.PI / 2, w: 2.0, h: 2.5, imgUrl: 'assets/images/2mes1.jpeg', title: 'Magia ✨',            message: 'Ese día alguien hizo trucos para nosotros, pero lo más mágico fue mirarte y saber que contigo todo se siente especial. ✨.' },
+      // Cuadro 2-F-2  (sur arriba)
+      { pos: [34.8, 3.1,  3.5],  ry: -Math.PI / 2, w: 1.8, h: 2.2, imgUrl: 'assets/images/2mes2.jpeg', title: 'Atarceder',       message: 'Hemos visto atardeceres hermosos, pero ninguno se compara con lo increíble que te ves tú; porque lo tuyo no solo se mira… se siente. 🌅❤️' },
+      // Cuadro 2-F-3  (abajo centro)
+      { pos: [34.8, 1.8,  1.0],  ry: -Math.PI / 2, w: 1.6, h: 1.9, imgUrl: 'assets/images/2mes3.jpeg', title: 'Tú ropa',   message: 'Me encanta cómo te vistes, porque en cada detalle de tu ropa se nota tu esencia; es como si llevaras tu personalidad puesta, y eso te hace aún más única 💕' },
+
+      // -- Pared NORTE de mes2 (z fijo ≈ -7.3, varía X positivo) --
+      // Cuadro 2-N-1  (cerca entrada)
+      { pos: [27.0, 2.8, -7.3],  ry: 0,            w: 1.6, h: 2.0, imgUrl: 'assets/images/2mes4.jpeg', title: 'Mi sonrisa',            message: 'A tu lado, mi sonrisa no la fuerzo ni la busco… simplemente nace sola, desde lo más profundo de mi corazón 💌' },
+      // Cuadro 2-N-2  (cerca fondo)
+      { pos: [31.5, 2.8, -7.3],  ry: 0,            w: 1.8, h: 2.2, imgUrl: 'assets/images/2mes5.jpeg', title: 'La luna 🌙',   message: 'Cada vez que miro la luna, pienso en ti… en lo bonita que eres y en ese brillo tan especial de tus ojos que ilumina mucho más que cualquier noche. 🌙✨' },
+
+      // -- Pared SUR de mes2 (z fijo ≈ 7.3, varía X positivo) --
+      // Cuadro 2-S-1  (cerca entrada)
+      { pos: [27.0, 2.8,  7.3],  ry: Math.PI,      w: 1.6, h: 2.0, imgUrl: 'assets/images/2mes6.jpeg', title: 'El cosmos', message: 'Dicen que el cosmos es infinito, pero lo que siento por ti hace que hasta lo infinito se quede corto. ✨' },
+      // Cuadro 2-S-2  (cerca fondo)
+      { pos: [31.5, 2.8,  7.3],  ry: Math.PI,      w: 1.8, h: 2.2, imgUrl: 'assets/images/2mes7.jpeg', title: 'La ciudad',      message: 'Las vistas a la ciudad pueden ser hermosas, pero nada se compara con mirarte a ti y sentir que ahí está todo lo que quiero. 🌆✨' },
+
+      // ══════════════════════════════════════════════════════════════════════
+      // MES 3  —  sala SUR  (z va de 25 hacia 34.8)
+      // ══════════════════════════════════════════════════════════════════════
+
+      // -- Pared del FONDO (z fijo ≈ 34.8, varía X) --
+      // Cuadro 3-F-1  (izquierda)
+      { pos: [-2.5, 3.3, 34.8],  ry: Math.PI,      w: 2.0, h: 2.5, imgUrl: 'assets/images/3mes1.jpeg', title: 'Tus abrazos',  message: 'Entre el profundo cielo azul, esas nubes cálidas son como tus abrazos, un refugio de paz en mi mundo  🌎❤️' },
+      // Cuadro 3-F-2  (derecha)
+      { pos: [ 2.5, 3.1, 34.8],  ry: Math.PI,      w: 1.8, h: 2.2, imgUrl: 'assets/images/3mes2.jpeg', title: 'Ni el cielo compite contigo', message: 'El atardecer pintó el cielo con sus mejores colores, pero aun así no logró opacar lo que tú haces sentir en mí. Porque por más bonito que sea el horizonte… nada se compara con la calma y la belleza que encuentro en ti. 🌙✨' },
+
+      // -- Pared ESTE de mes3 (x fijo ≈ 7.3, varía Z positivo) --
+      // Cuadro 3-E-1  (cerca entrada, z pequeño)
+      { pos: [7.3, 2.8, 26.5],   ry: -Math.PI / 2, w: 1.6, h: 2.0, imgUrl: 'assets/images/3mes3.jpeg', title: 'Lugares magicos',           message: 'Descubrir lugares mágicos contigo se volvió uno de mis hobbies favoritos… aunque, siendo sincero, lo más especial no es el lugar, sino verte disfrutarlos. ✨' },
+      // Cuadro 3-E-2  (cerca fondo, z grande)
+      { pos: [7.3, 2.8, 30.5],   ry: -Math.PI / 2, w: 1.7, h: 2.1, imgUrl: 'assets/images/3mes4.jpeg', title: 'Sentirte',              message: 'Me encanta sentirte cerquita, pegada a mí. Porque en ese pequeño espacio encuentro toda la paz y el amor que necesito 💖' },
+
+      // -- Pared OESTE de mes3 (x fijo ≈ -7.3, varía Z positivo) --
+      // Cuadro 3-O-1
+      { pos: [-7.3, 2.8, 28.5],  ry:  Math.PI / 2, w: 4, h: 4, imgUrl: 'assets/images/3mes5.jpeg', title: 'Mi princesa',    message: 'Nunca podré describir lo lindo que fue ese día, ver a mi princesa en un castillo, encantada con todo lo que ese lugar tenía para ofrecerle, fue demasiado mágico 💕💕' },
+
+      // ══════════════════════════════════════════════════════════════════════
+      // MES 4  —  sala OESTE  (x va de -25 hacia -34.8)
+      // ══════════════════════════════════════════════════════════════════════
+
+      // -- Pared del FONDO (x fijo ≈ -34.8, varía Z) --
+      // Cuadro 4-F-1  (norte arriba)
+      { pos: [-34.8, 3.3, -2.5], ry:  Math.PI / 2, w: 2.0, h: 2.5, imgUrl: 'assets/images/mes4x1.jpeg', title: 'vivirlo a tu lado',      message: 'Descubrir lugares contigo es genial; y aunque a veces no salga tan divertido como imaginábamos, vivirlo a tu lado lo convierte en un plan que nunca me quisiera perder ✨' },
+      // Cuadro 4-F-2  (sur arriba)
+      { pos: [-34.8, 3.3,  1.5], ry:  Math.PI / 2, w: 2.5, h: 3.2, imgUrl: 'assets/images/mes4x2.jpeg', title: 'El amor', message: 'Me encanta la forma tan linda y auténtica en que sentimos y vivimos el amor; lo nuestro no solo se dice, se demuestra en cada detalle 💖' },
+      // Cuadro 4-F-3  (abajo centro)
+      { pos: [-34.8, 3.3,  0.0], ry:  Math.PI / 2, w: 1.6, h: 1.9, imgUrl: 'assets/images/mes4x3.jpeg', title: 'Amo todo de ti',          message: 'Amo tus caras raras, tus pucheros y lo expresiva que eres, porque en cada gesto tuyo encuentro una forma única y hermosa de ti 💖' },
+
+      // -- Pared NORTE de mes4 (z fijo ≈ -7.3, varía X negativo) --
+      // Cuadro 4-N-1  (cerca entrada)
+      { pos: [-27.0, 2.8, -7.3], ry: 0,            w: 1.6, h: 2.0, imgUrl: 'assets/images/mes4x4.jpeg', title: 'Me encantas',   message: 'Me encanta verte mientras estás distraída, simplemente siendo tú, perdida en tus pensamientos o mirando algo fijamente. Es muy loco cómo te volviste el centro de mi atención sin importar el lugar en que estemos, y eso me encanta 💕' },
+      // Cuadro 4-N-2  (cerca fondo)
+      { pos: [-31.5, 2.8, -7.3], ry: 0,            w: 1.8, h: 2.2, imgUrl: 'assets/images/mes4x5.jpeg', title: 'Pequeños momentos',         message: 'Aunque el ruido y la gente nos incomoden, siempre encontramos paz en nuestros pequeños momentos; esos en los que solo existimos tú y yo, y todo lo demás deja de importar 💫' },
+
+      // -- Pared SUR de mes4 (z fijo ≈ 7.3, varía X negativo) --
+      // Cuadro 4-S-1  (cerca entrada)
+      { pos: [-27.0, 2.8,  7.3], ry: Math.PI,      w: 1.6, h: 2.0, imgUrl: 'assets/images/mes4x6.jpeg', title: 'Mi hogar',  message: 'Amo compartir mi familia contigo; son de lo más importante en mi vida, junto a ti. Hacerte parte de mi hogar es, sin duda, una de las cosas más bonitas que puedo darte. 💖' },
+      // Cuadro 4-S-2  (cerca fondo)
+      { pos: [-31.5, 2.8,  7.3], ry: Math.PI,      w: 1.8, h: 2.2, imgUrl: 'assets/images/mes4x7.jpeg', title: 'Rincon del mundo',              message: 'Es increible como cualquier rincón del mundo vale más la pena si es contigo ✨' },
     ];
 
     // Resolve any remaining overlaps before building
